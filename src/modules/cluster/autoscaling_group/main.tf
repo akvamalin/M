@@ -1,10 +1,12 @@
+## ECS optimized AMI
+## https://eu-central-1.console.aws.amazon.com/systems-manager/parameters/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id/description?region=eu-central-1#
 data "aws_ami" "amazon_linux" {
     most_recent = true
     owners = ["amazon"]
 
     filter {
         name = "image-id"
-        values = ["ami-0df0e7600ad0913a9"]
+        values = ["ami-0bfdae54e0eda93f2"]
     }
 }
 
@@ -71,6 +73,19 @@ resource "aws_key_pair" "cluster_instances_pk" {
     public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQD5jqQ6nq4AV3k1ZvkWrIBKjegAj97HgZrUpWsb0C1YiBCySvPLjibpLtcuij148bGCvrmUWo9olpl0tKeFV1gXhJg76pV9JV+84vboCEOM4zY04la3x6ZQkJaet7XAgjapW3S2vtyY1g7JHVZhx70iUU9T5u8INNE8WjLDu/AT8FxkmyuFjbRw13gXXdu/mCi0ksvwq1bbd1v3ZdfuC/TgTdXD2FMx6GCkG5yAqyx3WwLKoYuLyptmj2aMPOFTTMtxwzb72p7r2w04N0X02HkKyWlFqLNoMMmnrECCEkB59Ja/YWhuzBsF2i5rO504iIncS+P+M6vx200Yo+2YE+3zKcktCArXn5fSq+8RZHk976UwuYX1jKvqssI3izHJvF97DYTHNj76ScTDjFi/qo6y5/io5AWj03D1yxsfdoEMnYMN2PUXqmasFfqU/oWav9N2TRkBIkRjxMAfgLFm8UVUFQHrHTfQymOqFBi5J7HehO65+0mjlB90hnBN+Cy0xWQLdERPG1n/0IG+zn1jQlR64I049uFnkS0onFjTDTRYrM1hTlSJyczpemLThE6YEcMmJgq69i1zk9c3CgayDUvtJ1Cq1wgZbvd29KME5jAyk25EpVr9rh7/5spNCaoVCjmZtlihl33RnA5Bx3mCQc6lz4AudTyESTf/HiKBJ6Da6w=="
 }
 
+## Used to ssh into private ec2 instances for checking the config
+resource "aws_instance" "bastion_instance" {
+    instance_type = "t2.micro"
+    ami = data.aws_ami.amazon_linux.id
+    key_name = aws_key_pair.cluster_instances_pk.key_name
+
+    tags = {
+        Name = "Bastion"
+    }
+
+    subnet_id = var.public_subnet
+}
+
 resource "aws_launch_template" "autoscaling_launch_template" {
     name = "autoscaling_template"
     image_id = data.aws_ami.amazon_linux.id
@@ -81,8 +96,6 @@ resource "aws_launch_template" "autoscaling_launch_template" {
     user_data = filebase64("${path.module}/userdata.sh")
     key_name = aws_key_pair.cluster_instances_pk.key_name
 }
-
-
 
 resource "aws_autoscaling_group" "main" {
     min_size = 1
@@ -95,5 +108,5 @@ resource "aws_autoscaling_group" "main" {
         version = "$Latest"  
     }
 
-    vpc_zone_identifier = var.vpc_zone_id
+    vpc_zone_identifier = var.subnets
 }

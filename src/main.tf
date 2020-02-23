@@ -42,5 +42,6 @@ module "autoscaling_group" {
     source = "./modules/cluster/autoscaling_group"
     cluster_namespace = module.ecs_cluster.ecs_cluster_namespace
     availability_zones = ["eu-central-1a", "eu-central-1b"]
-    vpc_zone_id = [module.availability_zone_a.private_subnet_id, module.availability_zone_b.private_subnet_id]
+    subnets = [module.availability_zone_a.private_subnet_id, module.availability_zone_b.private_subnet_id]
+    public_subnet = module.availability_zone_a.public_subnet_id
 }

@@ -9,7 +9,12 @@ variable "availability_zones" {
     description = "Availability zones for cluster"
 }
 
-variable "vpc_zone_id" {
+variable "subnets" {
     type = list(string)
     description = "IDs of the subnets to launch the resources in"
+}
+
+variable "public_subnet" {
+    type = string
+    description = "Public subnet ID to place a bastion EC2 instance in"
 }
