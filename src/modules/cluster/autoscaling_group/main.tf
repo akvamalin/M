@@ -115,6 +115,8 @@ resource "aws_launch_template" "autoscaling_launch_template" {
   }
   user_data = filebase64("${path.module}/userdata.sh")
   key_name  = aws_key_pair.cluster_instances_pk.key_name
+
+  vpc_security_group_ids = [aws_security_group.ec2_security_group.id]
 }
 
 resource "aws_autoscaling_group" "main" {
