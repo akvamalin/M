@@ -10,3 +10,17 @@ resource "aws_s3_bucket"  "tf-state-bucket" {
         Context = "CNE20192020"
     }
 }
+
+resource "aws_ecr_repository" "ecr" {
+  name = "ymcne2019"
+  ## Tags of already pushed images cannot be overwritten, CI/CD  approach
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+output "ecr_repository" {
+    value = aws_ecr_repository.ecr.repository_url
+}

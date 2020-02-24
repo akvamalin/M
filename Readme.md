@@ -73,6 +73,18 @@ Network access control list - operate at subnet level, coarse-grained desicions.
 ## TO  READ:
 Regions and availability zones: https://blog.rackspace.com/aws-101-regions-availability-zones
 
+
+
+### ECR Login:
+```bash
+$(aws ecr get-login --no-include-email --region eu-central-1)
+$ docker tag sample-app:0.0.1 <account_number>.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019:latest
+$ docker push <account_number>.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019:latest
+```
+
+https://aws.amazon.com/ec2/instance-types/?nc1=h_ls
+
+
 ## 3. Demo
 
 Bastion -> ssh to public then to private instance and check the ping
