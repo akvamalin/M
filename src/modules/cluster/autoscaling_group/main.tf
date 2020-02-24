@@ -87,6 +87,25 @@ resource "aws_instance" "bastion_instance" {
   subnet_id = var.public_subnet
 }
 
+resource "aws_security_group" "ec2_security_group" {
+  name = "ec2-security-group"
+  vpc_id = var.vpc_id
+
+  ingress {
+    from_port = 0
+    to_port = 65535
+    protocol = "tcp"
+    security_groups = [var.lb_security_group_id]
+  }
+
+  egress {
+    from_port = 0
+    to_port = 65535
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 resource "aws_launch_template" "autoscaling_launch_template" {
   name          = "autoscaling_template"
   image_id      = data.aws_ami.amazon_linux.id

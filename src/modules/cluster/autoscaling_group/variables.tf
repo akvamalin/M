@@ -18,3 +18,13 @@ variable "public_subnet" {
   type        = string
   description = "Public subnet ID to place a bastion EC2 instance in"
 }
+
+variable "vpc_id" {
+  type = string
+  description = "VPC ID where the security groups belong to"
+}
+
+variable "lb_security_group_id" {
+  type = string
+  description = "Security Group of a load balancer to get the ingress traffic"
+}

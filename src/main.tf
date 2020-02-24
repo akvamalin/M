@@ -33,12 +33,22 @@ module "availability_zone_b" {
   availability_zone   = "eu-central-1b"
 }
 
+module "public_load_balancer" {
+  name    = "public-load-balancer"
+  source  = "./modules/cluster/load_balancer"
+  vpc_id  = module.vpc.vpc_id
+  subnets = [module.availability_zone_a.public_subnet_id, module.availability_zone_b.public_subnet_id]
+}
+
+
 module "autoscaling_group" {
   source             = "./modules/cluster/autoscaling_group"
   cluster_namespace  = module.ecs_cluster.ecs_cluster_namespace
   availability_zones = ["eu-central-1a", "eu-central-1b"]
   subnets            = [module.availability_zone_a.private_subnet_id, module.availability_zone_b.private_subnet_id]
   public_subnet      = module.availability_zone_a.public_subnet_id
+  vpc_id = module.vpc.vpc_id
+  lb_security_group_id = module.public_load_balancer.alb_sg_id
 }
 
 module "ecs_cluster" {
@@ -52,13 +62,6 @@ module "private_load_balancer" {
   source  = "./modules/cluster/load_balancer"
   vpc_id  = module.vpc.vpc_id
   subnets = [module.availability_zone_a.private_subnet_id, module.availability_zone_b.private_subnet_id]
-}
-
-module "public_load_balancer" {
-  name    = "public-load-balancer"
-  source  = "./modules/cluster/load_balancer"
-  vpc_id  = module.vpc.vpc_id
-  subnets = [module.availability_zone_a.public_subnet_id, module.availability_zone_b.public_subnet_id]
 }
 
 module "sample_service" {
