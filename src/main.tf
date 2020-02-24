@@ -33,15 +33,45 @@ module "availability_zone_b" {
     availability_zone = "eu-central-1b"
 }
 
-module "ecs_cluster" {
-    source = "./modules/cluster/ecs"
-    ecs_cluster_namespace = "ymcne2019"
-}
-
 module "autoscaling_group" {
     source = "./modules/cluster/autoscaling_group"
     cluster_namespace = module.ecs_cluster.ecs_cluster_namespace
     availability_zones = ["eu-central-1a", "eu-central-1b"]
     subnets = [module.availability_zone_a.private_subnet_id, module.availability_zone_b.private_subnet_id]
     public_subnet = module.availability_zone_a.public_subnet_id
+}
+
+module "ecs_cluster" {
+    source = "./modules/cluster/ecs"
+    ecs_cluster_namespace = "ymcne2019"
+}
+
+
+module "private_load_balancer" {
+    name = "private-load-balancer"
+    source = "./modules/cluster/load_balancer"
+    vpc_id = module.vpc.vpc_id
+    subnets = [module.availability_zone_a.private_subnet_id, module.availability_zone_b.private_subnet_id]
+}
+
+module "public_load_balancer" {
+    name = "public-load-balancer"
+    source = "./modules/cluster/load_balancer"
+    vpc_id = module.vpc.vpc_id
+    subnets = [module.availability_zone_a.public_subnet_id, module.availability_zone_b.public_subnet_id]
+}
+
+module "ecr_repository" {
+    source = "./modules/ecr"
+    ecr_name = "ymcne2019"
+}
+
+module "sample_service" {
+    source = "./modules/services/sample-service"
+    vpc_id = module.vpc.vpc_id
+    ecr_repository_name = module.ecr_repository.ecr_name
+    ecs_cluster = module.ecs_cluster.ecs_cluster_namespace
+    alb_listener_arn = module.public_load_balancer.listener_arn
+    service_name = "sample-service"
+    service_port = 5000
 }
