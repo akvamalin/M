@@ -1,8 +1,3 @@
-data "aws_ecr_image" "sample_service_image" {
-  repository_name = var.ecr_repository_name
-  image_tag       = "latest"
-}
-
 resource "aws_cloudwatch_log_group" "cw_log_group" {
   name = var.service_name
 }
@@ -118,6 +113,8 @@ resource "aws_service_discovery_service" "sds" {
       type = "SRV"
     }
 
+    # use multivalue answer routing when you need to return multiple values 
+    # for a DNS query and route traffic to multiple IP addresses.
     routing_policy = "MULTIVALUE"
   }
 }
