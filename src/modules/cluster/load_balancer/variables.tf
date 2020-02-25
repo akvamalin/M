@@ -12,3 +12,8 @@ variable "name" {
   type        = string
   description = "ALB name"
 }
+
+variable "zone_id" {
+  type        = string
+  description = "Route53 zone ID"
+}

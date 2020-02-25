@@ -28,6 +28,26 @@ variable "vpc_id" {
 }
 
 variable "image_url" {
-  type = string
+  type        = string
   description = "URL of the docker image"
+}
+
+variable "alb_dns_name" {
+  type        = string
+  description = "DNS name of the ALB"
+}
+
+variable "alb_zone_id" {
+  type        = string
+  description = "Hosted zone the ALB to associate with"
+}
+
+variable "zone_id" {
+  type        = string
+  description = "ID of the hosted zone"
+}
+
+variable "dns_name" {
+  type        = string
+  description = "Base dns name"
 }

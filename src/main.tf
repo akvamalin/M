@@ -10,6 +10,11 @@ terraform {
   }
 }
 
+data "aws_route53_zone" "primary" {
+  name         = "noname.engineer."
+  private_zone = false
+}
+
 module "vpc" {
   source         = "./modules/network/vpc"
   vpc_cidr_range = "10.0.0.0/16"
@@ -38,16 +43,17 @@ module "public_load_balancer" {
   source  = "./modules/cluster/load_balancer"
   vpc_id  = module.vpc.vpc_id
   subnets = [module.availability_zone_a.public_subnet_id, module.availability_zone_b.public_subnet_id]
+  zone_id = data.aws_route53_zone.primary.zone_id
 }
 
 
 module "autoscaling_group" {
-  source             = "./modules/cluster/autoscaling_group"
-  cluster_namespace  = module.ecs_cluster.ecs_cluster_namespace
-  availability_zones = ["eu-central-1a", "eu-central-1b"]
-  subnets            = [module.availability_zone_a.private_subnet_id, module.availability_zone_b.private_subnet_id]
-  public_subnet      = module.availability_zone_a.public_subnet_id
-  vpc_id = module.vpc.vpc_id
+  source               = "./modules/cluster/autoscaling_group"
+  cluster_namespace    = module.ecs_cluster.ecs_cluster_namespace
+  availability_zones   = ["eu-central-1a", "eu-central-1b"]
+  subnets              = [module.availability_zone_a.private_subnet_id, module.availability_zone_b.private_subnet_id]
+  public_subnet        = module.availability_zone_a.public_subnet_id
+  vpc_id               = module.vpc.vpc_id
   lb_security_group_id = module.public_load_balancer.alb_sg_id
 }
 
@@ -56,13 +62,6 @@ module "ecs_cluster" {
   ecs_cluster_namespace = "ymcne2019"
 }
 
-
-module "private_load_balancer" {
-  name    = "private-load-balancer"
-  source  = "./modules/cluster/load_balancer"
-  vpc_id  = module.vpc.vpc_id
-  subnets = [module.availability_zone_a.private_subnet_id, module.availability_zone_b.private_subnet_id]
-}
 
 module "sample_service" {
   source              = "./modules/services/sample-service"
@@ -73,4 +72,8 @@ module "sample_service" {
   service_name        = "sample-service"
   service_port        = 5000
   image_url           = "870343420982.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019:latest"
+  alb_dns_name        = module.public_load_balancer.alb_dns_name
+  alb_zone_id         = module.public_load_balancer.alb_zone_id
+  zone_id             = data.aws_route53_zone.primary.zone_id
+  dns_name            = "noname.engineer"
 }

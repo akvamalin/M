@@ -15,7 +15,7 @@ data "template_file" "container_definition" {
     aws_logs_group         = aws_cloudwatch_log_group.cw_log_group.name
     aws_logs_region        = "eu-central-1"
     aws_logs_stream_prefix = var.service_name
-    container_image = var.image_url
+    container_image        = var.image_url
   }
 }
 
@@ -73,8 +73,8 @@ resource "aws_lb_listener_rule" "sample_service" {
   listener_arn = var.alb_listener_arn
 
   condition {
-    path_pattern {
-      values = ["/sample-service/*"]
+    host_header {
+      values = [format("%s.%s", var.service_name, var.dns_name)]
     }
   }
 
@@ -83,6 +83,19 @@ resource "aws_lb_listener_rule" "sample_service" {
     target_group_arn = aws_lb_target_group.target_group.arn
   }
 }
+
+resource "aws_route53_record" "alb_record" {
+  zone_id = var.zone_id
+  name    = format("%s.%s", var.service_name, var.dns_name)
+  type    = "A"
+
+  alias {
+    name                   = var.alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = false
+  }
+}
+
 
 resource "aws_ecs_task_definition" "sample_service_task" {
   family                = var.service_name
