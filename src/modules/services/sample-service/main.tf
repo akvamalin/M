@@ -96,11 +96,30 @@ resource "aws_route53_record" "alb_record" {
   }
 }
 
-
 resource "aws_ecs_task_definition" "sample_service_task" {
   family                = var.service_name
   container_definitions = data.template_file.container_definition.rendered
   task_role_arn         = aws_iam_role.ecs_service_task_execution_role.arn
+}
+
+resource "aws_service_discovery_private_dns_namespace" "sd_dns_namespace" {
+  name = format("%s.%s", var.service_name, "noname.local")
+  vpc = var.vpc_id
+}
+
+resource "aws_service_discovery_service" "sds" {
+  name = format("%s-service-discovery-service", var.service_name)
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.sd_dns_namespace.id
+
+    dns_records {
+      ttl = 10
+      type = "SRV"
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
 }
 
 resource "aws_ecs_service" "sample_service" {
@@ -113,5 +132,11 @@ resource "aws_ecs_service" "sample_service" {
     target_group_arn = aws_lb_target_group.target_group.arn
     container_name   = var.service_name
     container_port   = var.service_port
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.sds.arn
+    container_port = var.service_port
+    container_name = var.service_name
   }
 }

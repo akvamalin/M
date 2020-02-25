@@ -1,5 +1,5 @@
 variable "cluster_namespace" {
-  type        = "string"
+  type        = string
   description = "ECS cluster namespace to register EC2 instance"
 }
 
