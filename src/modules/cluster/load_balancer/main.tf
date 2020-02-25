@@ -1,10 +1,14 @@
+data "aws_acm_certificate" "cert" {
+  domain  = "*.noname.engineer"
+}
+
 resource "aws_security_group" "lb_sg" {
   name   = format("%s-sg", var.name)
   vpc_id = var.vpc_id
 
   ingress {
     from_port   = 80
-    to_port     = 80
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -27,8 +31,10 @@ resource "aws_lb" "alb" {
 
 resource "aws_lb_listener" "listener" {
   load_balancer_arn = aws_lb.alb.arn
-  port              = 80
-  protocol          = "HTTP"
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn = data.aws_acm_certificate.cert.arn
 
 
   default_action {
@@ -41,3 +47,22 @@ resource "aws_lb_listener" "listener" {
     }
   }
 }
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.alb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+
+
