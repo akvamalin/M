@@ -4,7 +4,57 @@ data "template_file" "container_definition" {
     service_name           = var.service_name
     service_port           = var.service_port
     container_image        = var.image_url
+    aws_logs_group         = aws_cloudwatch_log_group.cw_log_group.name
+    aws_logs_region        = "eu-central-1"
+    aws_logs_stream_prefix = var.service_name
   }
+}
+
+resource "aws_cloudwatch_log_group" "cw_log_group" {
+  name = var.service_name
+}
+
+resource "aws_iam_role" "ecs_service_task_execution_role" {
+  name = format("%s-ecs-service-role", var.service_name)
+
+  assume_role_policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Action": "sts:AssumeRole",
+        "Principal": {
+          "Service": "ecs-tasks.amazonaws.com"
+        },
+        "Effect": "Allow",
+        "Sid": ""
+      }
+    ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy" "ecs_task_role_policy" {
+  name = format("%s-cloudwatch", var.service_name)
+  role = aws_iam_role.ecs_service_task_execution_role.id
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogStreams"
+                
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+EOF
 }
 
 resource "aws_lb_target_group" "target_group" {

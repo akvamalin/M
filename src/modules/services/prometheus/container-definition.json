@@ -9,6 +9,14 @@
             {
                 "containerPort": ${service_port}
             }
-        ]
+        ],
+        "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+                "awslogs-group": "${aws_logs_group}",
+                "awslogs-region": "${aws_logs_region}",
+                "awslogs-stream-prefix": "${aws_logs_stream_prefix}"
+            }
+        }
     }
 ]
