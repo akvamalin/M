@@ -1,7 +1,5 @@
 # WIP: Setting up telemetry data and monitoring service via Grafana & Prometheus for a microservice
 
-> Computer Networks Engineering Project. Wintersemester 2019/2020. Master Informatics. LMU in cooperation with Mercateo. The project idea is provided by the Mercateo. In particular, the existing productive system  must be extended to enable the desired behavior. For the sake of this project, although it borrows the architecural decisions, the whole system will be implemented from scratch on a simpler use-case to provide better understanding, abstract away from business details and concentrate on the technical concepts.
-
 ## Abstract
 
 The value of this project is to implement a production-ready system into the cloud for keeping track of highly-available data-processing microservices, monitoring how they perform and detecting faults quickly.
