@@ -1,4 +1,4 @@
-# Setting up telemetry data and monitoring services using Grafana & Prometheus
+# Infrastructure for highly-available monitored microservices
 
 ## Abstract
 
