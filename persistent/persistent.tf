@@ -31,6 +31,16 @@ resource "aws_ecr_repository" "prometheus" {
   }
 }
 
+resource "aws_ecr_repository" "grafana" {
+  name = "ymcne2019/grafana"
+  ## Tags of already pushed images cannot be overwritten, CI/CD  approach
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
 resource "aws_route53_zone" "primary" {
   name = "noname.engineer"
 }
@@ -49,6 +59,10 @@ output "sample_service_image_url" {
 
 output "prometheus_image_url" {
   value = aws_ecr_repository.prometheus.repository_url
+}
+
+output "grafana_image_url" {
+  value = aws_ecr_repository.grafana.repository_url
 }
 
 output "dns_servers" {

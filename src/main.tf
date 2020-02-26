@@ -92,3 +92,19 @@ module "prometheus" {
   zone_id             = data.aws_route53_zone.primary.zone_id
   dns_name            = "noname.engineer"
 }
+
+module "grafana" {
+  source              = "./modules/services/grafana"
+  vpc_id              = module.vpc.vpc_id
+  ecr_repository_name = "ymcne2019/grafana"
+  ecs_cluster         = module.ecs_cluster.ecs_cluster_namespace
+  alb_listener_arn    = module.public_load_balancer.listener_arn
+  service_name        = "grafana"
+  service_port        = 3000
+  image_url           = "870343420982.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019/grafana:0.0.1"
+  alb_dns_name        = module.public_load_balancer.alb_dns_name
+  alb_zone_id         = module.public_load_balancer.alb_zone_id
+  zone_id             = data.aws_route53_zone.primary.zone_id
+  dns_name            = "noname.engineer"
+}
+
