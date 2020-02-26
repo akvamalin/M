@@ -64,7 +64,7 @@ resource "aws_lb_target_group" "target_group" {
   vpc_id   = var.vpc_id
 
   health_check {
-    path = "/graph"
+    path = "/#/alerts"
   }
 }
 
