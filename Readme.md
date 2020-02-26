@@ -282,13 +282,117 @@ Depending on the subnet, to which an EC2 instance is attached, it will get eithe
 
 For the sake of project, the t2.micro type of a virtual machine has been chosen. More information on the machine characteristics is on [AWS](https://aws.amazon.com/ec2/instance-types/?nc1=h_ls)
 
+**Key question** is how to provision the computing capacity and make it constantly available?
+One approach would be to manually launch desired number of instances and manually check that the required computing capacity is availabe. The second approach would be to automate this.
+
+**Auto-scaling groups** is one of the AWS services that, when configured correctly, takes over the responsibility for sustaining the desired computing resources and performing health-checks.
+
+The following information is required to launch an instance.
+1. Which type of machine image to use? (Linux, Suse, Windows)
+2. On which virtual machine to launch, in other words, what are the virtual machine characteristics?
+3. What is the minimum VM number, maximum, as well as desired.
+
+Providing this information to the auto-scaling group would ensure that the desired computing capacity is available.
+
+Along with that information, several additional options were supplied to the autoscaling group:
+1. The script to perform on the startup of the virtual machine (more details on this in further sections) (Launch template, userdata script).
+2. Behind which firewalls to put the virtual machine (Security Groups)
+3. What are other services the virtual machine is allowed to call within the VPC (IAM policies and roles).
+
+Another crucial for `high-availability`concept is the availability zones. Those are also given to the autoscaling group so that the virtual machines that are spinned up are distributed accross availability zones depending on specified strategy. E.g. if the desired number of virtual machines is 2, 1 will be located in a private subnet 10.0.11.0/24 (availability zone a) and another one in a private subnet 10.0.22.0/24 (availability zone b) that have been created previously.
+
+#### Terraform
+**/src/modules/cluster/autoscaling_group/main.tf**
+```hcl
+## ECS optimized AMI
+## https://eu-central-1.console.aws.amazon.com/systems-manager/parameters/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id/description?region=eu-central-1#
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "image-id"
+    values = ["ami-0bfdae54e0eda93f2"]
+  }
+}
+
+... 
+
+## Used to ssh into private ec2 instances for checking the config
+resource "aws_instance" "bastion_instance" {
+  instance_type = "t2.micro"
+  ami           = data.aws_ami.amazon_linux.id
+  key_name      = aws_key_pair.cluster_instances_pk.key_name
+
+  tags = {
+    Name = "Bastion"
+  }
+
+  subnet_id = var.public_subnet
+}
+
+resource "aws_security_group" "ec2_security_group" {
+  name   = "ec2-security-group"
+  vpc_id = var.vpc_id
+
+  ingress {
+    from_port       = 0
+    to_port         = 65535
+    protocol        = "tcp"
+    security_groups = [var.lb_security_group_id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group_rule" "sg_rule" {
+  type                     = "ingress"
+  to_port                  = 65535
+  from_port                = 0
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ec2_security_group.id
+  security_group_id        = aws_security_group.ec2_security_group.id
+}
+
+resource "aws_launch_template" "autoscaling_launch_template" {
+  name          = "autoscaling_template"
+  image_id      = data.aws_ami.amazon_linux.id
+  instance_type = "t2.micro"
+  iam_instance_profile {
+    name = "ec2_cluster_instance_profile"
+  }
+  user_data = filebase64("${path.module}/userdata.sh")
+  key_name  = aws_key_pair.cluster_instances_pk.key_name
+
+  vpc_security_group_ids = [aws_security_group.ec2_security_group.id]
+}
+
+resource "aws_autoscaling_group" "main" {
+  min_size           = 1
+  max_size           = 3
+  desired_capacity   = 3
+  availability_zones = var.availability_zones
+
+  launch_template {
+    id      = aws_launch_template.autoscaling_launch_template.id
+    version = "$Latest"
+  }
+
+  vpc_zone_identifier = var.subnets
+}
+```
+
 ### 2.1.1. IP addressing
 Select CIDR range.
 
 There is the place where the subnets come into place. The subnets are subdivisions of the initial CIDR range. Each of the availability zones is a subnet. 
 
 Routing in a VPC.
-
 
 3 things are needed in order to communicate with the Internet.
 1. Some form of connection.
