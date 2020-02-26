@@ -1,0 +1,16 @@
+global:
+    slack_api_url: 
+        https://hooks.slack.com/services/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
+
+receivers:
+    - name: slack-notifications
+      slack_configs:
+        - channel: '#ymcne2019-alerts'
+
+
+route:
+    group_by: ['alertname']
+    group_interval: 30s
+    repeat_interval: 30m
+    group_wait: 1m
+    receiver: slack-notifications

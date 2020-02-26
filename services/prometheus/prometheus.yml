@@ -11,3 +11,8 @@ scrape_configs:
     
 
 
+alerting:
+    alertmanagers:
+        - static_configs:
+            - targets:
+                - alertmanager-service-discovery-service.alertmanager.noname.local

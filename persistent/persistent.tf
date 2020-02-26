@@ -41,6 +41,16 @@ resource "aws_ecr_repository" "grafana" {
   }
 }
 
+resource "aws_ecr_repository" "prometheus-alertmanager" {
+  name = "ymcne2019/prometheus-alertmanager"
+
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
 resource "aws_route53_zone" "primary" {
   name = "noname.engineer"
 }
@@ -64,6 +74,11 @@ output "prometheus_image_url" {
 output "grafana_image_url" {
   value = aws_ecr_repository.grafana.repository_url
 }
+
+output "prometheus-alertmanager_image_url" {
+  value = aws_ecr_repository.prometheus-alertmanager.repository_url
+}
+
 
 output "dns_servers" {
   value = aws_route53_zone.primary.name_servers

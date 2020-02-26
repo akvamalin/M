@@ -86,12 +86,29 @@ module "prometheus" {
   alb_listener_arn    = module.public_load_balancer.listener_arn
   service_name        = "prometheus"
   service_port        = 9090
-  image_url           = "870343420982.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019/prometheus:0.0.2"
+  image_url           = "870343420982.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019/prometheus:0.0.3"
   alb_dns_name        = module.public_load_balancer.alb_dns_name
   alb_zone_id         = module.public_load_balancer.alb_zone_id
   zone_id             = data.aws_route53_zone.primary.zone_id
   dns_name            = "noname.engineer"
 }
+
+module "prometheus-alertmanager" {
+  source              = "./modules/services/prometheus-alertmanager"
+  vpc_id              = module.vpc.vpc_id
+  ecr_repository_name = "ymcne2019/prometheus-alertmanager"
+  ecs_cluster         = module.ecs_cluster.ecs_cluster_namespace
+  alb_listener_arn    = module.public_load_balancer.listener_arn
+  service_name        = "alertmanager"
+  service_port        = 9093
+  image_url           = "870343420982.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019/prometheus-alertmanager:0.0.2"
+  alb_dns_name        = module.public_load_balancer.alb_dns_name
+  alb_zone_id         = module.public_load_balancer.alb_zone_id
+  zone_id             = data.aws_route53_zone.primary.zone_id
+  dns_name            = "noname.engineer"
+}
+
+
 
 module "grafana" {
   source              = "./modules/services/grafana"
