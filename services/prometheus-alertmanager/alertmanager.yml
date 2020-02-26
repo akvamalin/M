@@ -1,11 +1,8 @@
-global:
-    slack_api_url: 
-        https://hooks.slack.com/services/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
-
 receivers:
     - name: slack-notifications
       slack_configs:
         - channel: '#ymcne2019-alerts'
+          api_url: https://hooks.slack.com/services/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
 
 
 route:

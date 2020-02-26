@@ -15,6 +15,7 @@ Any outage, errors or malicious behavior of the microservice must be automatical
 Therefore, a system is needed that enables the detection of any anomalies that are reported automatically.
 
 
+
 ## 1. Project objective 
 
 The objective of this project is to learn how to configure a cloud infrastrucuter and setup monitoring along with alerting according to the cloud best practices. This involves investigating and applying the concepts of *containerized applications, web communication protocols, cloud security, logging and monitoring, alerting, service discovery, autoscaling, roles and permissions in cloud as well as infrastructure as code*. Those concepts are applied in the AWS Cloud Provider. 
@@ -275,6 +276,9 @@ module "availability_zone_b" {
 }
 ```
 
+More on regions and availability zones [here](https://blog.rackspace.com/aws-101-regions-availability-zones).
+
+
 #### 2.1.5. Computing resources
 As soon as the network infrastructure is ready, the computing resources can be deployed to the VPC. 
 
@@ -302,6 +306,9 @@ Along with that information, several additional options were supplied to the aut
 3. What are other services the virtual machine is allowed to call within the VPC (IAM policies and roles).
 
 Another crucial for `high-availability`concept is the availability zones. Those are also given to the autoscaling group so that the virtual machines that are spinned up are distributed accross availability zones depending on specified strategy. E.g. if the desired number of virtual machines is 2, 1 will be located in a private subnet 10.0.11.0/24 (availability zone a) and another one in a private subnet 10.0.22.0/24 (availability zone b) that have been created previously.
+
+
+In order to check that the subnets (private/public) and instances within those subnets behave as expected (connectivity, conneciton to the Internet), a so called "Bastion" instance has been added -> ssh to public then to private instance and check via ping.
 
 #### Terraform
 **/src/modules/cluster/autoscaling_group/main.tf**
@@ -568,52 +575,100 @@ resource "aws_ecs_service" "sample_service" {
 ```
 
 ### 2.2.2. Making the service accessible
+Even though the services are up and running, they are still not accessible from the outside. In first step, I  would ask myself: 
+* How could they be accessed?
+* What is the IP and port as I don't deploy them myself but delegate it to cluster agent.
+* They are deployed on the instances in a private subnet, how could they be accessed then?
+* How to dynamically discover the IP address and port as the containers are stopped and spinned up automatically?
+
+The load balancer comes to the rescue.
+There are several types of load balancers, but the used one for this project is the Application Load Balancer provided by the AWS. 
+
+According to the definition of an ALP of the AWS `A load balancer serves as the single point of contact for clients. The load balancer distributes incoming application traffic across multiple targets, such as EC2 instances, in multiple Availability Zones. This increases the availability of your application`. The ALB, in particular, only serves the HTTP/HTTPS traffic.
+
+To put it simple, the ALB is attached to public subnets, processes the incomming HTTP/HTTPS requests and depending on the defined rules routes the requests and responses. Two key questions: What are those rules and where does it route the traffic.
+
+The rules are conditions that, when fulfilled, trigger an action. E.g. if the hostname is x.y -> route traffic to that location, if the hostname is t.y -> to another location.
+
+In order to know where to route the traffic if a condition is met, the ALB has so called "target groups". The targets are, in our particular case, the containers. 
+
+The target groups can be imagined as table records containing the entries in form of service -> location. These entries are added/removed by the cluster agent as it spins up/terminates the containers.
+
+More nice explanation on ALB and target groups on [AWS page](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html).
 
 
+### 2.3. Deploying services
+Now that the infrastructure is ready, all of the planned services can be deployed:
+1. `sample-service` - simple service, exposes metrics.
+2. `prometheus` - collects metrics, aggregates, reduces, etc.
+3. `alert-manager` - sends alerts on predefined conditions.
+4. `grafana` - visualizes metrics.
 
-Security.
+All of the services, except `sample-service` are official container images pulled from docker registry and extended with custom setup.
 
-Security Goups - AWS distributed firewalls, operate on instance level.
-
-Network access control list - operate at subnet level, coarse-grained desicions.
-
-## TO  READ:
-Regions and availability zones: https://blog.rackspace.com/aws-101-regions-availability-zones
+The exteded images are then uploaded to the AWS Container Registry, (look `/persistent/persistent.tf`) and used in the task definitions.
 
 
+#### 2.3.1 DNS with Route53
+In order to make the services easily accessible, the domain names have been setup. Depending on the subdomain, the application load balancer routes the traffic to the corresponding target group.
+1. https://sample-service.noname.engineer
+1. https://grafana.noname.engineer
+1. https://prometheus.noname.engineer
+1. https://alertmanager.noname.engineer
 
-### ECR Login:
+
+#### 2.3.2 Service Discovery
+The prometheus collects the metrics of the services. In this particular project, the prometheus scraps the `/metrics` endpoint of the sample-service.
+
+The location of the sample-service instances is discovered using the Service Discovery mechanism. This mechanism is implemented by the ECS service discovery directory and private hosted zone with SRV records.
+
+Better to explain that on diagrams which are currently missing.
+
+
+### 3. Demo
+**sample-service metrics**
+![](./docs/metrics.png)
+
+**prometheus**
+![](./docs/targets.png)
+
+![](./docs/prometheus.png)
+
+**grafana**
+![](./docs/grafana.png)
+
+Lets cause some traffic.
+If there are too many requests per minute, the alert to the slack channel should be sent.
+
 ```bash
-$(aws ecr get-login --no-include-email --region eu-central-1)
-$ docker tag sample-app:0.0.1 <account_number>.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019:latest
-$ docker push <account_number>.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019:latest
+for ((i=1;i<100;i++)); do curl "https://sample-service.noname.engineer/" ; done
 ```
 
-https://aws.amazon.com/ec2/instance-types/?nc1=h_ls
+**grafana**
+![](./docs/grafana-load.png)
+
+**alertmanager**
+![](./docs/alertmanager.png)
+
+**slack**
+![](./docs/slack.png)
+
+### 4. Room for improvement
+1. Put the prometheus, prometheus-alerter behind the private load balancer (ommited in order to show something in the presentation, or would need to setup VPN server)
+2. Terraform apply is very inconsistent now, would need to call it more than once because of some resource dependencies.
 
 
-## 3. Demo
+### 5. How to run
+1. Create an AWS Free tier account.
+2. Deploy persistent resources (hosted zone, ecr repos) (needs a certificate, domain name etc)
+3. Goto *src*
+4. run `tf apply` and approve deployment
 
-Bastion -> ssh to public then to private instance and check the ping
-## 4. Conclusion
-
-## 5. Bibliography
+### TODO
+* Diagrams are incomming
 
 
-CIDR defines the number of instances u can have
+# And btw
+This is my first blood with AWS infrastructure in terms of EC2, clusters, security,  service discovery, VPC etc, so this was supposed to give me understanding of the  concepts.
 
-
-after having subnets, i need my capacity resources, so i need to create virtual machines, EC2 instances. Depending on where i put them, they get an ip address, explain about ec2 instances, used to run workloads, comntainer workloads, for my service i took specific type of instances
-
-Talk about autoscaling groups, which ensure my computing capacity  is maintained.
-
-How data flow happens between subnets and ec2 instances, is configured by routing tables. And the security is provided by ACLs and SG. If i want i can restrict the access.
-
-1. VPC
-2. Compute capacity
-3. How do I add service
-4.  How  I route traffic into the service (how the services are exposed to the outside world)
-
-ECS  offers better integration features
-
-I setup virtual private cloud and its infrastructure and then deploy services  on that  to demonstrate how it works.
+Thanks a lot to my lovely colleagues G.G. and M.S. for supporting me and patiently answering all my stupid basic questions. Your way of explaining things with pencil and paper is excellent, thank you so much.
