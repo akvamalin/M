@@ -129,7 +129,7 @@ The difference between the public and private subnets is that each entity (put s
 Note, the private IP addresses are taken from the specified CIDR range.
 
 
-Why is the public/private split needed? This can be illustrated on a simple use-case of a traditional web application, where the web server faces the internet traffic and routes it to the web application that is connected to the database. In this setup, the web server is allocated into a public subnet, the web application and database in a  private one. 
+Why is the public/private split needed? The systems outside are not allowed to access all the services by default. This can be illustrated on a simple use-case of a traditional web application, where the web server faces the internet traffic and routes it to the web application that is connected to the database. In this setup, the web server is allocated into a public subnet, the web application and database in a  private one. 
 
 
 Therefore, for the sake of this project, the two CIDRs for subnets are selected:
@@ -150,6 +150,8 @@ The case for a private subnet is pretty similar, however instead of routing any 
 
 **NAT Gateway**
 NAT Gateway, routing the traffic from private subnet to the  public subnet,  is attached to the public subnet, has its own public IP address and has a routing table attached to it. The routing table routes any outbound traffic to the Internet Gateway.
+
+The NAT gateway is one-way wall. It allows responses to the requests that come from inside, others are rejected.  In routing, the instances launched in a private subnet, are going to the NAT gateway which in its turn goes to Internet gateway. That is how outbound internet access is achieved. The Internet can only respond to the requests. For sending the requests, it requires Inbound internet access. 
 
 #### Terraform code
 **/src/modules/network/subnet/main.tf** 
@@ -387,26 +389,187 @@ resource "aws_autoscaling_group" "main" {
 }
 ```
 
-### 2.1.1. IP addressing
-Select CIDR range.
-
-There is the place where the subnets come into place. The subnets are subdivisions of the initial CIDR range. Each of the availability zones is a subnet. 
-
-Routing in a VPC.
-
-3 things are needed in order to communicate with the Internet.
-1. Some form of connection.
-2. Route.
-3. Public address.
+## 2.2. Container cluster
+Now the basic infrastructure is ready: the network is configured, routing and connectivity is setup, computing resources are provisioned. In order to utilize virtualization and provisioned resources in an efficient way, the services will be deployed not on the raw machines, however using container cluster (of course there  are many other pros of using containers for HTC too).
 
 
-1. Public subnet means that each instance launched in public  subnet gets a public IP address along with a private IP address.
-2. Internet Gateway is added to the VPC so that the connection exists.
-3. Add the  route -> the default  way of getting out of subnet is via IGW.
+### 2.2.1. Tasks
 
-A private subnet -> stick with a private range, don't give me a public IP address. The use case for that is  that the systems from outside cannot access  my system by default. 
+The work distribution is therefore delegated to an agent that will schedule the tasks onto the virtual machines.
 
-In  order to give the private subnet an access to the Internet, the NAT gateway is used. The NAT gateway is one-way wall. It allows responses to the requests that come from inside, others are rejected.  In routing, the instances launched in a private subnet, are going to the NAT gateway which in its turn goes to Internet gateway. That is how outbound internet access is achieved. The Internet can only respond to the requests. For sending the requests, it requires Inbound internet access. 
+To start with,  the basic terminology is clarified.
+
+A **task** is a running containerized application that is deployed by a cluster agent onto the virtual machine.
+
+The task is created by the cluster agent according to the task definition which specifies the required resources as well as the container image.
+
+The cluster agent consumes the service definition, which is the the task definition along with the number of tasks that need to be provisioned.
+
+After the service definition is deployed and the tasks are created and distributed over the instances, the application is running and ready to be accessed.
+
+#### Terraform
+These code snippets show one of the service definitions.
+
+**container-definition.json**
+```json
+  {
+        "name": "${service_name}",
+        "image": "${container_image}",
+        "cpu": 128,
+        "memory": 128,
+        "essential": true,
+        "portMappings": [
+            {
+                "containerPort": ${service_port}
+            }
+        ],
+```
+
+```hcl
+resource "aws_cloudwatch_log_group" "cw_log_group" {
+  name = var.service_name
+}
+
+data "template_file" "container_definition" {
+  template = file("${path.module}/container-definition.json")
+  vars = {
+    service_name           = var.service_name
+    service_port           = var.service_port
+    aws_logs_group         = aws_cloudwatch_log_group.cw_log_group.name
+    aws_logs_region        = "eu-central-1"
+    aws_logs_stream_prefix = var.service_name
+    container_image        = var.image_url
+  }
+}
+
+resource "aws_iam_role" "ecs_service_task_execution_role" {
+  name = format("%s-ecs-service-role", var.service_name)
+
+  assume_role_policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Action": "sts:AssumeRole",
+        "Principal": {
+          "Service": "ecs-tasks.amazonaws.com"
+        },
+        "Effect": "Allow",
+        "Sid": ""
+      }
+    ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy" "ecs_task_role_policy" {
+  name = format("%s-cloudwatch", var.service_name)
+  role = aws_iam_role.ecs_service_task_execution_role.id
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogStreams"
+                
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+EOF
+}
+
+resource "aws_lb_target_group" "target_group" {
+  name     = format("%s-lb-target-group", var.service_name)
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+}
+
+resource "aws_lb_listener_rule" "sample_service" {
+  listener_arn = var.alb_listener_arn
+
+  condition {
+    host_header {
+      values = [format("%s.%s", var.service_name, var.dns_name)]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.target_group.arn
+  }
+}
+
+resource "aws_route53_record" "alb_record" {
+  zone_id = var.zone_id
+  name    = format("%s.%s", var.service_name, var.dns_name)
+  type    = "A"
+
+  alias {
+    name                   = var.alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_ecs_task_definition" "sample_service_task" {
+  family                = var.service_name
+  container_definitions = data.template_file.container_definition.rendered
+  task_role_arn         = aws_iam_role.ecs_service_task_execution_role.arn
+}
+
+resource "aws_service_discovery_private_dns_namespace" "sd_dns_namespace" {
+  name = format("%s.%s", var.service_name, "noname.local")
+  vpc  = var.vpc_id
+}
+
+resource "aws_service_discovery_service" "sds" {
+  name = format("%s-service-discovery-service", var.service_name)
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.sd_dns_namespace.id
+
+    dns_records {
+      ttl  = 10
+      type = "SRV"
+    }
+
+    # use multivalue answer routing when you need to return multiple values 
+    # for a DNS query and route traffic to multiple IP addresses.
+    routing_policy = "MULTIVALUE"
+  }
+}
+
+resource "aws_ecs_service" "sample_service" {
+  name            = var.service_name
+  cluster         = var.ecs_cluster
+  desired_count   = 2
+  task_definition = format("%s:%s", aws_ecs_task_definition.sample_service_task.family, aws_ecs_task_definition.sample_service_task.revision)
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.target_group.arn
+    container_name   = var.service_name
+    container_port   = var.service_port
+  }
+
+  service_registries {
+    registry_arn   = aws_service_discovery_service.sds.arn
+    container_port = var.service_port
+    container_name = var.service_name
+  }
+}
+```
+
+### 2.2.2. Making the service accessible
+
+
 
 Security.
 
