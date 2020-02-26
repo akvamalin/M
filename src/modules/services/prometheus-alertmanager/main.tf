@@ -103,7 +103,7 @@ resource "aws_ecs_task_definition" "sample_service_task" {
 
 resource "aws_service_discovery_private_dns_namespace" "sd_dns_namespace" {
   name = format("%s.%s", var.service_name, "noname.local")
-  vpc = var.vpc_id
+  vpc  = var.vpc_id
 }
 
 resource "aws_service_discovery_service" "sds" {
@@ -113,7 +113,7 @@ resource "aws_service_discovery_service" "sds" {
     namespace_id = aws_service_discovery_private_dns_namespace.sd_dns_namespace.id
 
     dns_records {
-      ttl = 10
+      ttl  = 10
       type = "SRV"
     }
 
@@ -136,7 +136,7 @@ resource "aws_ecs_service" "sample_service" {
   }
 
   service_registries {
-    registry_arn = aws_service_discovery_service.sds.arn
+    registry_arn   = aws_service_discovery_service.sds.arn
     container_port = var.service_port
     container_name = var.service_name
   }

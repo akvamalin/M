@@ -1,5 +1,5 @@
 data "aws_acm_certificate" "cert" {
-  domain  = "*.noname.engineer"
+  domain = "*.noname.engineer"
 }
 
 resource "aws_security_group" "lb_sg" {
@@ -15,20 +15,20 @@ resource "aws_security_group" "lb_sg" {
 }
 
 resource "aws_security_group_rule" "ingress_http" {
-  type = "ingress"
-  from_port = 80
-  to_port = 80
-  protocol = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_security_group.lb_sg.id
 }
 
 resource "aws_security_group_rule" "ingress_https" {
-  type = "ingress"
-  from_port = 443
-  to_port = 443
-  protocol = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_security_group.lb_sg.id
 }
 
@@ -45,7 +45,7 @@ resource "aws_lb_listener" "listener" {
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn = data.aws_acm_certificate.cert.arn
+  certificate_arn   = data.aws_acm_certificate.cert.arn
 
 
   default_action {
