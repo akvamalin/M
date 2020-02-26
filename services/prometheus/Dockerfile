@@ -1,5 +1,4 @@
 FROM prom/prometheus
 
 COPY prometheus.yml /etc/prometheus/prometheus.yml
-
-VOLUME ["/etc/prometheus/"]
+COPY ./rules /etc/prometheus/rules

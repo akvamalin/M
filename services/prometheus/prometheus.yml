@@ -1,6 +1,9 @@
 global:
     scrape_interval: 30s
-    evaluation_interval: 1m
+    evaluation_interval: 30s
+
+rule_files:
+    - rules/alerting_rules.yml
 
 scrape_configs:
     - job_name: sample-service
@@ -8,9 +11,7 @@ scrape_configs:
 
       dns_sd_configs:
         - names:
-            - "sample-service-service-discovery-service.sample-service.noname.local"
-    
-
+            - sample-service-service-discovery-service.sample-service.noname.local
 
 alerting:
     alertmanagers:

@@ -1,0 +1,9 @@
+groups:
+    - name: alert.rules
+      rules:
+        - alert: TooManyRequestsPerMinute
+          expr: rate(app_request_count_total[1m]) > 0.5
+          labels:
+            severity: "critical"
+          annotations:
+            summary: "Too many requests per minute"

@@ -86,7 +86,7 @@ module "prometheus" {
   alb_listener_arn    = module.public_load_balancer.listener_arn
   service_name        = "prometheus"
   service_port        = 9090
-  image_url           = "870343420982.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019/prometheus:0.0.5"
+  image_url           = "870343420982.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019/prometheus:0.0.7"
   alb_dns_name        = module.public_load_balancer.alb_dns_name
   alb_zone_id         = module.public_load_balancer.alb_zone_id
   zone_id             = data.aws_route53_zone.primary.zone_id
@@ -101,7 +101,7 @@ module "prometheus-alertmanager" {
   alb_listener_arn    = module.public_load_balancer.listener_arn
   service_name        = "alertmanager"
   service_port        = 9093
-  image_url           = "870343420982.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019/prometheus-alertmanager:0.0.2"
+  image_url           = "870343420982.dkr.ecr.eu-central-1.amazonaws.com/ymcne2019/prometheus-alertmanager:0.0.5"
   alb_dns_name        = module.public_load_balancer.alb_dns_name
   alb_zone_id         = module.public_load_balancer.alb_zone_id
   zone_id             = data.aws_route53_zone.primary.zone_id

@@ -131,7 +131,7 @@ resource "aws_launch_template" "autoscaling_launch_template" {
 resource "aws_autoscaling_group" "main" {
   min_size           = 1
   max_size           = 3
-  desired_capacity   = 2
+  desired_capacity   = 3
   availability_zones = var.availability_zones
 
   launch_template {
