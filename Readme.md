@@ -1,11 +1,11 @@
-# WIP: Setting up telemetry data and monitoring service via Grafana & Prometheus for a microservice
+# Setting up telemetry data and monitoring services using Grafana & Prometheus
 
 ## Abstract
 
-The value of this project is to implement a production-ready system into the cloud for keeping track of highly-available data-processing microservices, monitoring how they perform and detecting faults quickly.
+The value of this project is to implement a production-ready system in the cloud for keeping track of highly-available data-processing microservices, monitoring how they perform and detecting faults quickly.
 
-To be more specific, a following use-case is given. 
 
+### Background 
 A microservice is deployed to a production ready system. From a developer point of view, it is important to detect any faults and monitor the resource usage in order to be compliant with SLAs and provide a certain percentage of service availability. As soon as either a fault in the service or resource usage spikes occur, a developer must me notified and must be able to see and understand the cause of the problem.
 
 An imaginary real-life sample is given to provide better understanding of the system.
@@ -17,31 +17,273 @@ Therefore, a system is needed that enables the detection of any anomalies that a
 
 ## 1. Project objective 
 
-The objective of this project is to learn how to deploy and configure a complex monitoring and alerting system according to the cloud best practices. This involves investigating in details and applying the concepts of *containerized applications, web communication protocols, cloud security, logging and monitoring, alerting, service discovery, autoscaling, roles and permissions in cloud as well as infrastructure as code*. Those concepts are applied in the AWS Cloud Provider. 
+The objective of this project is to learn how to configure a cloud infrastrucuter and setup monitoring along with alerting according to the cloud best practices. This involves investigating and applying the concepts of *containerized applications, web communication protocols, cloud security, logging and monitoring, alerting, service discovery, autoscaling, roles and permissions in cloud as well as infrastructure as code*. Those concepts are applied in the AWS Cloud Provider. 
 
 The general approach of this project is following:
 1. Describe the architecture of the whole system.
 2. Analyze the required components (say, building blocks) needed to construct the system.
-3. Prepare the starting point for implementing the monitoring and alerting system. That means setting up basic cloud infrastrucutre, a dummy microservice, deploying it to the cloud as if production ready (auto-scaling, load-balaning, security are investigated and added). This process is described in details as the project is done from  scratch and the infrastructure does not exist at all.
-4. Plan, prepare and deploy the components enabling the monitoring and alerting. These steps are described in details and with argumentations. 
+3. Configure the Cloud infrastructure from scratch.
+4. Plan, prepare and deploy the components enabling the monitoring and alerting
 5. Prepare a demonstration with a use-case. 
 
 **Keywords**: AWS ECS, ECR, Route53, IAM, KMS, ALB, Security Groups, VPC, Prometheus, Grafana, Terraform, Python, Flask.
 
+
 ## 2. Implementation
 
+A starting point of this project is to setup a virtual private cloud. A VPC, in terms of Amazon Web Services, is a virtual data center given into one's control. It's a backbone for the whole system.
+
 ## 2.1. Build a VPC
-An AWS Virtual Private Cloud is a virtual data center where things are deployed. 
-To setup a VPC, the following things need to be configured:
-1. IP addressing
-2. Subnets
-3. Routing in a VPC
-4. Security. 
+To setup a VPC, the following components need to be deployed and configured:
+1. VPC.
+2. Subnets.
+3. Routing.
+4. Availability Zones.
+5. Computing resources.
+
+### 2.1.1. VPC
+In order to deploy a VPC, a classless inter-domain routing (following as `CIDR`) range needs to be specified. 
+
+#### CIDR range
+The selected CIDR range is: `10.0.0.0/16`. The choice of the CIDR range is important and must be investaged in more details as it defines the number of virtual machines as well as subnets that can be created within the VPC.
+
+#### Internet Gateway
+In order to enable the Internet communication from and to the created VPC, an Internet Gateway must be created. According to the AWS, `An internet gateway is a horizontally scaled, redundant, and highly available VPC component that allows communication between instances in your VPC and the internet`. [AWS Source](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html).
+
+#### Access Control Lists
+ACLs are firewalls that are attached to the VPC or subnets. The ACLs are used to make coarse-grained traffic filtering instead of fine-grained which is the job of security groups. E.g., ACLs are used to DENY/ALLOW traffic from one specific IP range. 
+
+For the sake of this projects, ACLs are defaul and allow all traffic, even though they should be explicitly specified. 
+
+Note! When taking a look at terraform code defining ACLs, there are rule priorities. The rule is evaluated in exclusive way based on priority. If ALLOW is evaluated, then no further DENY is taken into account.
+
+#### Terraform
+The mentioned above components can be deployed and configured via the following terraform code.
+
+**/src/modules/network/vpc/main.tf** 
+```hcl
+resource "aws_vpc" "main_vpc" {
+  cidr_block           = var.vpc_cidr_range
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+}
+
+resource "aws_internet_gateway" "internet_gw" {
+  vpc_id = aws_vpc.main_vpc.id
+}
+
+resource "aws_network_acl" "main" {
+  vpc_id = aws_vpc.main_vpc.id
+
+  egress {
+    from_port  = 0
+    to_port    = 0
+    protocol   = "-1"
+    action     = "allow"
+    rule_no    = 100
+    cidr_block = "0.0.0.0/0"
+  }
+
+  ingress {
+    from_port  = 0
+    to_port    = 0
+    protocol   = "-1"
+    action     = "allow"
+    rule_no    = 100
+    cidr_block = "0.0.0.0/0"
+  }
+
+  egress {
+    from_port  = 0
+    to_port    = 0
+    protocol   = "-1"
+    action     = "deny"
+    rule_no    = 1000
+    cidr_block = "0.0.0.0/0"
+  }
+
+  ingress {
+    from_port  = 0
+    to_port    = 0
+    protocol   = "-1"
+    action     = "deny"
+    rule_no    = 1000
+    cidr_block = "0.0.0.0/0"
+  }
+
+  tags = {
+    Name = "main_acl"
+  }
+}
+```
+
+### 2.1.2. Subnets
+As soon as the backbone has been set up, the next step is to define and configure subnets. 
+
+The subnets are subdivisions of the initial CIDR range.
+
+One of the best practices is to divide a VPC into a **public** and **private** subnet.
+The difference between the public and private subnets is that each entity (put simply, virtual machine) attached to the public subnet, gets automatically a public IP address assigned along with a private one and can be reached from the Internet. The virtual machines, attached to the private subnet are assigned only private IP addresses. 
+
+
+Note, the private IP addresses are taken from the specified CIDR range.
+
+
+Why is the public/private split needed? This can be illustrated on a simple use-case of a traditional web application, where the web server faces the internet traffic and routes it to the web application that is connected to the database. In this setup, the web server is allocated into a public subnet, the web application and database in a  private one. 
+
+
+Therefore, for the sake of this project, the two CIDRs for subnets are selected:
+1. 10.0.1.0/24 - private subnet.
+2. 10.0.11.0/24 - public subnet.
+
+
+### 2.1.3. Routing
+Before placing any computing resources into the subnets, the routing within the VPC must be configured. 
+
+**Public subnet**
+All the virtual machines/components put into the public subnet must be able to communicate with the Internet as well as with the entities within the VPC itself. Therefore two entries to the routing table for public subnet are added:
+* one allowing outbound traffic to the Internet Gateway.
+* one saying connections within the VPC are routed to the VPC network.
+
+**Private subnet** 
+The case for a private subnet is pretty similar, however instead of routing any outbound traffic to the Internet Gateway,  the traffic is routed to the NAT Gateway that is attached to the public subnet and therefore has a public IP address.
+
+**NAT Gateway**
+NAT Gateway, routing the traffic from private subnet to the  public subnet,  is attached to the public subnet, has its own public IP address and has a routing table attached to it. The routing table routes any outbound traffic to the Internet Gateway.
+
+#### Terraform code
+**/src/modules/network/subnet/main.tf** 
+```hcl
+resource "aws_subnet" "public" {
+  vpc_id                  = var.vpc_id
+  cidr_block              = var.public_subnet_cidr
+  availability_zone       = var.availability_zone
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = format("public %s", var.availability_zone)
+  }
+}
+
+resource "aws_subnet" "private" {
+  vpc_id            = var.vpc_id
+  cidr_block        = var.private_subnet_cidr
+  availability_zone = var.availability_zone
+
+  tags = {
+    Name = format("private %s", var.availability_zone)
+  }
+}
+
+## NAT Gateway configuration
+resource "aws_eip" "nat_gw_ip" {
+  vpc = true
+}
+
+resource "aws_nat_gateway" "nat_gw" {
+  allocation_id = aws_eip.nat_gw_ip.id
+  subnet_id     = aws_subnet.public.id
+}
+
+resource "aws_route_table" "nat_gw_routing_table" {
+  vpc_id = var.vpc_id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = var.igw_id
+  }
+
+  tags = {
+    Name = format("NAT %s", var.availability_zone)
+  }
+}
+
+resource "aws_route_table_association" "nat_gw_routes" {
+  subnet_id      = aws_subnet.private.id
+  route_table_id = aws_route_table.private_routing_table.id
+}
+
+## Private subnet configuration
+resource "aws_route_table" "private_routing_table" {
+  vpc_id = var.vpc_id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat_gw.id
+  }
+
+  tags = {
+    Name = format("private subnet %s", var.availability_zone)
+  }
+}
+
+resource "aws_route_table_association" "private_subnet_routes" {
+  route_table_id = aws_route_table.private_routing_table.id
+  subnet_id      = aws_subnet.private.id
+}
+
+## Public subnet configuration  
+resource "aws_route_table" "public_routing_table" {
+  vpc_id = var.vpc_id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = var.igw_id
+  }
+
+  tags = {
+    Name = format("public subnet %s", var.availability_zone)
+  }
+}
+
+resource "aws_route_table_association" "public_subnet_routes" {
+  route_table_id = aws_route_table.public_routing_table.id
+  subnet_id      = aws_subnet.public.id
+}
+```
+
+### 2.1.4. Availability zones
+In the posted terraform code above there are mentions of availability zones.
+
+To put it simple, availability zones - separate risk domains, each of them are in one or more data centers, on different power grids and completely independent. If something affects one availability zone, it would not affect all of them.
+
+Therefore, the 2 more subnets as well as a NAT gateway are deployed, however to another availability zone:
+* 10.0.2.0 - private subnet
+* 10.0.22.0 - public subnet
+
+This would result in following terraform code:
+**/src/main.tf**
+```hcl
+module "availability_zone_a" {
+  source              = "./modules/network/subnet"
+  vpc_id              = module.vpc.vpc_id
+  igw_id              = module.vpc.igw_id
+  private_subnet_cidr = "10.0.1.0/24"
+  public_subnet_cidr  = "10.0.11.0/24"
+  availability_zone   = "eu-central-1a"
+}
+
+module "availability_zone_b" {
+  source              = "./modules/network/subnet"
+  vpc_id              = module.vpc.vpc_id
+  igw_id              = module.vpc.igw_id
+  private_subnet_cidr = "10.0.2.0/24"
+  public_subnet_cidr  = "10.0.22.0/24"
+  availability_zone   = "eu-central-1b"
+}
+```
+
+#### 2.1.5. Computing resources
+As soon as the network infrastructure is ready, the computing resources can be deployed to the VPC. 
+
+The virtual machines, EC2 instances in terms of AWS, run container workloads.  
+
+Depending on the subnet, to which an EC2 instance is attached, it will get either private IP address or both private and public. 
+
+For the sake of project, the t2.micro type of a virtual machine has been chosen. More information on the machine characteristics is on [AWS](https://aws.amazon.com/ec2/instance-types/?nc1=h_ls)
 
 ### 2.1.1. IP addressing
 Select CIDR range.
-
-Availability zones - separate risk domains, each of them are in one or more data centers, on different power grids and completely independent. If something affects one availability zone, it would not affect all of them.
 
 There is the place where the subnets come into place. The subnets are subdivisions of the initial CIDR range. Each of the availability zones is a subnet. 
 
@@ -89,3 +331,22 @@ Bastion -> ssh to public then to private instance and check the ping
 ## 4. Conclusion
 
 ## 5. Bibliography
+
+
+CIDR defines the number of instances u can have
+
+
+after having subnets, i need my capacity resources, so i need to create virtual machines, EC2 instances. Depending on where i put them, they get an ip address, explain about ec2 instances, used to run workloads, comntainer workloads, for my service i took specific type of instances
+
+Talk about autoscaling groups, which ensure my computing capacity  is maintained.
+
+How data flow happens between subnets and ec2 instances, is configured by routing tables. And the security is provided by ACLs and SG. If i want i can restrict the access.
+
+1. VPC
+2. Compute capacity
+3. How do I add service
+4.  How  I route traffic into the service (how the services are exposed to the outside world)
+
+ECS  offers better integration features
+
+I setup virtual private cloud and its infrastructure and then deploy services  on that  to demonstrate how it works.
